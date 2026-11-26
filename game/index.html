@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMBERLINE — an island courier flight game at last light</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --ink: #fdf6ec;
+    --muted: #cdbfa8;
+    --amber: #ffb454;
+    --teal: #2fe8c8;
+    --panel: linear-gradient(160deg, rgba(7, 23, 28, 0.80), rgba(7, 23, 28, 0.60));
+    --edge: rgba(255, 180, 84, 0.38);
+    --cut: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a1c22; font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hud { position: fixed; inset: 0; pointer-events: none; color: var(--ink); text-shadow: 0 1px 3px rgba(0,0,0,0.65); }
+  .panel { background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut); backdrop-filter: blur(3px); }
+
+  /* Top-left: brand + mission panel */
+  .hud-topleft { position: absolute; top: 14px; left: 16px; width: 348px; }
+  .brand { font-size: 27px; font-weight: 700; letter-spacing: 0.22em; }
+  .brand-mark { color: var(--amber); font-size: 20px; }
+  .brand-sub { font-size: 11.5px; font-weight: 400; letter-spacing: 0.14em; color: var(--muted); margin-top: 1px; }
+  .mission-panel { margin-top: 12px; padding: 12px 14px 13px; }
+  .mp-head { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 0.18em; color: var(--amber); font-weight: 600; }
+  .mp-title { font-size: 21px; font-weight: 650; margin-top: 5px; letter-spacing: 0.01em; }
+  .mp-detail { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin-top: 4px; }
+  .mp-progress { font-size: 12px; letter-spacing: 0.06em; margin-top: 9px; color: var(--ink); }
+  .mp-stops { font-size: 12.5px; margin-top: 5px; letter-spacing: 0.05em; }
+  .mp-stop { border-bottom: 2px solid rgba(253,246,236,0.35); padding-bottom: 1px; }
+  .mp-stop.done { color: var(--amber); border-bottom-color: var(--amber); }
+  .mp-sep { margin: 0 7px; color: var(--muted); }
+  .mp-nextrow { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; margin-top: 9px; }
+  #mp-nextdist { color: var(--amber); font-weight: 600; white-space: nowrap; }
+  .mp-scorerow { display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; }
+  .mp-score { font-size: 13px; letter-spacing: 0.14em; color: var(--muted); }
+  .mp-score b { font-size: 24px; font-weight: 650; color: var(--ink); letter-spacing: 0.02em; margin-left: 4px; }
+  .mp-best { font-size: 11.5px; letter-spacing: 0.12em; color: var(--muted); }
+  .mp-target { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .mp-feedback { font-size: 13px; color: var(--teal); margin-top: 5px; min-height: 17px; letter-spacing: 0.03em; }
+
+  /* Top-centre: heading + compass tape */
+  .hud-topcenter { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); text-align: center; }
+  .hdg-label { font-size: 10.5px; letter-spacing: 0.34em; color: var(--muted); }
+  .hdg-big { font-size: 37px; font-weight: 250; line-height: 1.05; }
+  .hdg-card { font-size: 15px; color: var(--amber); margin-left: 7px; letter-spacing: 0.1em; }
+  #hud-tape { display: block; margin: 1px auto 0; }
+
+  /* Top-right chips */
+  .hud-topright { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; }
+  .chip { background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut); padding: 6px 11px; font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
+  .chip b { color: var(--ink); border: 1px solid rgba(253,246,236,0.5); padding: 0 5px; margin-left: 5px; font-weight: 600; }
+
+  /* Bottom-left instruments */
+  .hud-bottomleft { position: absolute; left: 16px; bottom: 34px; display: flex; align-items: flex-end; gap: 18px; }
+  .inst-label { font-size: 10.5px; letter-spacing: 0.3em; color: var(--muted); }
+  .inst-unit { color: var(--amber); }
+  .inst-big { font-size: 56px; font-weight: 200; line-height: 1; margin-top: 2px; }
+  .inst-sub { font-size: 11.5px; letter-spacing: 0.16em; color: var(--muted); margin-top: 3px; }
+  .att { text-align: center; }
+  #hud-att { display: block; }
+  .vs-chip { display: inline-block; margin-top: 5px; background: rgba(7, 23, 28, 0.78); border: 1px solid var(--edge); padding: 2px 9px; font-size: 12.5px; }
+
+  /* Bottom-centre: bars, gear/flaps boxes, weather */
+  .hud-bottomcenter { position: absolute; left: 50%; transform: translateX(-50%); bottom: 34px; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .bc-top { display: flex; align-items: flex-end; gap: 20px; }
+  .bars { width: 218px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .bar-row:first-child { margin-top: 0; }
+  .bar-label { font-size: 10px; letter-spacing: 0.22em; color: var(--muted); width: 58px; }
+  .bar { flex: 1; height: 7px; background: rgba(7, 23, 28, 0.65); border: 1px solid rgba(253,246,236,0.28); }
+  .bar-fill { height: 100%; transition: width 0.18s; }
+  .bar-fill.power { background: var(--amber); }
+  .bar-fill.fuel { background: var(--teal); }
+  .bar-fill.fuel.low { background: #ff6a3c; }
+  .bar-fill.frame { background: #e8e2d2; }
+  .bar-num { font-size: 11.5px; width: 36px; text-align: right; }
+  .boxes { display: flex; gap: 9px; }
+  .gbox { background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut); padding: 6px 12px 7px; text-align: center; min-width: 62px; }
+  .gbox-head { font-size: 10px; letter-spacing: 0.24em; color: var(--muted); }
+  .gbox-head b { color: var(--ink); border: 1px solid rgba(253,246,236,0.5); padding: 0 4px; margin-left: 3px; }
+  .gbox-state { font-size: 16.5px; font-weight: 650; letter-spacing: 0.12em; margin-top: 2px; }
+  .gbox.warn-state { border-color: #ff6a3c; }
+  .gbox.warn-state .gbox-state { color: #ff6a3c; }
+  .wx-line { font-size: 12px; letter-spacing: 0.14em; margin-top: 2px; white-space: nowrap; }
+  .wx-line.storm { color: #ff8a5c; font-weight: 700; }
+  .plane-name { font-size: 10.5px; letter-spacing: 0.2em; color: var(--muted); margin-top: 3px; white-space: nowrap; }
+
+  /* Bottom-right minimap */
+  .hud-bottomright { position: absolute; right: 16px; bottom: 34px; }
+  .map-head { display: flex; justify-content: space-between; font-size: 10.5px; letter-spacing: 0.24em; color: var(--muted); margin-bottom: 4px; }
+  #hud-map { display: block; border: 1px solid var(--edge); background: #0c2a33; }
+
+  /* Bottom edge hints */
+  .hud-hints-left { position: absolute; left: 16px; bottom: 10px; font-size: 11.5px; letter-spacing: 0.1em; color: var(--muted); }
+  .hud-hints-right { position: absolute; right: 16px; bottom: 10px; font-size: 11.5px; letter-spacing: 0.1em; color: var(--muted); }
+  .hud-hints-right b { color: var(--ink); }
+
+  .hud-message { position: absolute; top: 21%; left: 50%; transform: translateX(-50%); font-size: 25px; font-weight: 650; color: #ffd9a0; letter-spacing: 0.02em; text-align: center; }
+  .hud-warn { position: absolute; top: 29%; left: 50%; transform: translateX(-50%); font-size: 21px; font-weight: 800; color: #ff6a3c; letter-spacing: 0.12em; }
+  .hud-crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; color: var(--amber); opacity: 0.75; }
+
+  /* Overlay screens */
+  .hud-screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .hud-screen.title-screen { align-items: flex-end; justify-content: flex-start; padding: 0 0 34px 34px; }
+  .screen-panel { pointer-events: auto; background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut); backdrop-filter: blur(3px); padding: 26px 34px; text-align: center; color: var(--ink); max-width: 730px; }
+  .hud-screen.title-screen .screen-panel { text-align: left; max-width: 640px; padding: 20px 26px; }
+  .screen-panel h1 { margin: 0 0 8px; font-size: 42px; letter-spacing: 0.3em; font-weight: 700; }
+  .screen-tag { margin: 6px 0; font-size: 16px; color: var(--muted); line-height: 1.5; }
+  .screen-help { margin: 16px 0 4px; font-size: 13.5px; line-height: 1.65; color: var(--muted); }
+  .screen-best { margin: 10px 0 0; font-size: 13.5px; color: var(--amber); }
+  .mission-row { display: flex; gap: 11px; margin-top: 16px; }
+  .mission-card { flex: 1; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; background: rgba(255, 180, 84, 0.08); border: 1px solid var(--edge); clip-path: var(--cut); color: var(--ink); padding: 13px 12px; cursor: pointer; font-family: inherit; }
+  .mission-card:hover { background: rgba(255, 180, 84, 0.2); }
+  .mission-key { font-size: 11px; border: 1px solid var(--ink); padding: 1px 7px; }
+  .mission-name { font-size: 16px; font-weight: 700; line-height: 1.25; }
+  .mission-short { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="game" aria-label="EMBERLINE: fly a courier plane between dusk islands, thread the guide hoops, drop the cargo and land before dark"></canvas>
+<div id="hud-root"></div>
+<p id="status" role="status" aria-live="polite"></p>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
